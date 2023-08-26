@@ -36,31 +36,34 @@ namespace ShipIt.Controllers
 
             Log.Debug(String.Format("Found operations manager: {0}", operationsManager));
 
-            var allStock = _stockRepository.GetStockByWarehouseId(warehouseId);
+            var needReStock = _stockRepository.GetReStockByWarehouseId(warehouseId);
+
+            Dictionary<int, ProductDataModel> reStockProductDetails = _productRepository.GetReStockProductsByWId(warehouseId).ToDictionary(p => p.Id, p => p);
+           
+            Dictionary<string, CompanyDataModel> reStockSuppliers = _companyRepository.GetReStockSuppliersByWId(warehouseId).ToDictionary(c => c.Gcp, c => c);
 
             Dictionary<Company, List<InboundOrderLine>> orderlinesByCompany = new Dictionary<Company, List<InboundOrderLine>>();
-            foreach (var stock in allStock)
+            
+            foreach (var stock in needReStock)
             {
-                Product product = new Product(_productRepository.GetProductById(stock.ProductId));
-                if(stock.held < product.LowerThreshold && !product.Discontinued)
+                Product product = new Product(reStockProductDetails[stock.ProductId]);
+
+                Company company = new Company(reStockSuppliers[product.Gcp]);
+
+                var orderQuantity = Math.Max(product.LowerThreshold * 3 - stock.held, product.MinimumOrderQuantity);
+
+                if (!orderlinesByCompany.ContainsKey(company))
                 {
-                    Company company = new Company(_companyRepository.GetCompany(product.Gcp));
-
-                    var orderQuantity = Math.Max(product.LowerThreshold * 3 - stock.held, product.MinimumOrderQuantity);
-
-                    if (!orderlinesByCompany.ContainsKey(company))
-                    {
-                        orderlinesByCompany.Add(company, new List<InboundOrderLine>());
-                    }
-
-                    orderlinesByCompany[company].Add( 
-                        new InboundOrderLine()
-                        {
-                            gtin = product.Gtin,
-                            name = product.Name,
-                            quantity = orderQuantity
-                        });
+                    orderlinesByCompany.Add(company, new List<InboundOrderLine>());
                 }
+
+                orderlinesByCompany[company].Add(
+                    new InboundOrderLine()
+                    {
+                        gtin = product.Gtin,
+                        name = product.Name,
+                        quantity = orderQuantity
+                    });
             }
 
             Log.Debug(String.Format("Constructed order lines: {0}", orderlinesByCompany));

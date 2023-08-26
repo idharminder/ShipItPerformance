@@ -1,4 +1,5 @@
 ﻿.idea
-**/.env
+*dump.sql
 bin
 obj
+.vscode/

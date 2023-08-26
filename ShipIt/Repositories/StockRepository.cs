@@ -14,6 +14,7 @@ namespace ShipIt.Repositories
         int GetTrackedItemsCount();
         int GetStockHeldSum();
         IEnumerable<StockDataModel> GetStockByWarehouseId(int id);
+        IEnumerable<StockDataModel> GetReStockByWarehouseId(int id);
         Dictionary<int, StockDataModel> GetStockByWarehouseAndProductIds(int warehouseId, List<int> productIds);
         void RemoveStock(int warehouseId, List<StockAlteration> lineItems);
         void AddStock(int warehouseId, List<StockAlteration> lineItems);
@@ -49,6 +50,24 @@ namespace ShipIt.Repositories
             }
         }
 
+        public IEnumerable<StockDataModel> GetReStockByWarehouseId(int id)
+        {
+            // string sql = "SELECT p_id, hld, w_id FROM stock WHERE w_id = @w_id";
+            string sql = "SELECT stock.p_id, hld, w_id " +
+            "FROM stock JOIN gtin ON stock.p_id = gtin.p_id " +
+            "WHERE w_id = @w_id AND ds = 0 AND hld < l_th";
+            var parameter = new NpgsqlParameter("@w_id", id);
+            string noProductWithIdErrorMessage = string.Format("No stock found with w_id: {0}", id);
+            try
+            {
+                return base.RunGetQuery(sql, reader => new StockDataModel(reader), noProductWithIdErrorMessage, parameter).ToList();
+            }
+            catch (NoSuchEntityException)
+            {
+                return new List<StockDataModel>();
+            }
+        }
+
         public Dictionary<int, StockDataModel> GetStockByWarehouseAndProductIds(int warehouseId, List<int> productIds)
         {
             string sql = string.Format("SELECT p_id, hld, w_id FROM stock WHERE w_id = @w_id AND p_id IN ({0})",
@@ -59,7 +78,7 @@ namespace ShipIt.Repositories
             var stock = base.RunGetQuery(sql, reader => new StockDataModel(reader), noProductWithIdErrorMessage, parameter);
             return stock.ToDictionary(s => s.ProductId, s => s);
         }
-            
+
         public void AddStock(int warehouseId, List<StockAlteration> lineItems)
         {
             var parametersList = new List<NpgsqlParameter[]>();
@@ -79,9 +98,9 @@ namespace ShipIt.Repositories
             var recordsAffected = new List<int>();
             foreach (var parameters in parametersList)
             {
-                 recordsAffected.Add(
-                     RunSingleQueryAndReturnRecordsAffected(sql, parameters)
-                 );
+                recordsAffected.Add(
+                    RunSingleQueryAndReturnRecordsAffected(sql, parameters)
+                );
             }
 
             string errorMessage = null;

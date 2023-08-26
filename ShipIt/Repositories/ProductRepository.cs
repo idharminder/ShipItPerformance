@@ -14,6 +14,7 @@ namespace ShipIt.Repositories
         ProductDataModel GetProductByGtin(string gtin);
         IEnumerable<ProductDataModel> GetProductsByGtin(List<string> gtins);
         ProductDataModel GetProductById(int id);
+        IEnumerable<ProductDataModel> GetReStockProductsByWId(int w_id);
         void AddProducts(IEnumerable<ProductDataModel> products);
         void DiscontinueProductByGtin(string gtin);
     }
@@ -23,7 +24,7 @@ namespace ShipIt.Repositories
         public int GetCount()
         {
             string EmployeeCountSQL = "SELECT COUNT(*) FROM gcp";
-            return (int) QueryForLong(EmployeeCountSQL);
+            return (int)QueryForLong(EmployeeCountSQL);
         }
 
         public ProductDataModel GetProductByGtin(string gtin)
@@ -38,11 +39,36 @@ namespace ShipIt.Repositories
         public IEnumerable<ProductDataModel> GetProductsByGtin(List<string> gtins)
         {
 
-            string sql = String.Format("SELECT p_id, gtin_cd, gcp_cd, gtin_nm, m_g, l_th, ds, min_qt FROM gtin WHERE gtin_cd IN ('{0}')", 
+            string sql = String.Format("SELECT p_id, gtin_cd, gcp_cd, gtin_nm, m_g, l_th, ds, min_qt FROM gtin WHERE gtin_cd IN ('{0}')",
                 String.Join("','", gtins));
             return base.RunGetQuery(sql, reader => new ProductDataModel(reader), "No products found with given gtin ids", null);
         }
 
+
+
+        // public IEnumerable<ProductDataModel> GetReStockProductsByWId(int id)
+        // {
+        //     string sql = "SELECT gtin.p_id, gtin_cd, gcp_cd, gtin_nm, m_g, l_th, ds, min_qt FROM gtin JOIN stock ON gtin.p_id = stock.p_id WHERE w_id = @w_id AND ds = 0 AND hld < l_th";
+        //     var parameter = new NpgsqlParameter("@w_id", id);
+        //     return base.RunGetQuery(sql, reader => new ProductDataModel(reader), "No products found with given gtin ids", null);
+        // }
+
+        public IEnumerable<ProductDataModel> GetReStockProductsByWId(int id)
+        {
+            string sql = "SELECT gtin.p_id, gtin_cd, gcp_cd, gtin_nm, m_g, l_th, ds, min_qt " +
+            "FROM gtin JOIN stock ON gtin.p_id = stock.p_id " +
+            "WHERE w_id = @w_id AND ds = 0 AND hld < l_th";
+            var parameter = new NpgsqlParameter("@w_id", id);
+            string noProductWithIdErrorMessage = string.Format("No stock found with w_id: {0}", id);
+            try
+            {
+                return base.RunGetQuery(sql, reader => new ProductDataModel(reader), noProductWithIdErrorMessage, parameter).ToList();
+            }
+            catch (NoSuchEntityException)
+            {
+                return new List<ProductDataModel>();
+            }
+        }
         public ProductDataModel GetProductById(int id)
         {
 
